@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-seed
+spec:
+  template:
+    spec:
+      containers:
+      - name: mongodb-seed
+        image: node:14
+        command: ["node", "/app/seed.js"]
+        volumeMounts:
+        - name: seed-script
+          mountPath: /app
+        env:
+        - name: MONGO_URI
+          value: "mongodb://mongodb-service:27017/articles"
+      restartPolicy: Never
+      volumes:
+      - name: seed-script
+        configMap:
+          name: seed-script
+  backoffLimit: 4
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seed-script
+data:
+  "seed.js": |
+    require('dotenv').config();
+    const mongoose = require('mongoose');
+    
+    // Définir le schéma d'article
+    const articleSchema = new mongoose.Schema({
+      title: String,
+      content: String,
+      author: String
+    });
+    
+    const Article = mongoose.model('Article', articleSchema);
+    
+    mongoose.connect(process.env.MONGO_URI, {})
+      .then(() => console.log('✅ Connecté à MongoDB'))
+      .catch(err => console.error('❌ Erreur MongoDB :', err));
+    
+    const articles = [
+        { title: "Introduction à Node.js", content: "Node.js est un runtime JavaScript...", author: "Alice" },
+        { title: "MongoDB pour les débutants", content: "MongoDB est une base de données NoSQL...", author: "Bob" },
+        { title: "Les promesses en JavaScript", content: "Les promesses permettent de gérer l'asynchronisme...", author: "Charlie" },
+        { title: "Comment utiliser Express.js", content: "Express.js est un framework minimaliste...", author: "David" },
+        { title: "REST vs GraphQL", content: "Les API REST et GraphQL sont souvent comparées...", author: "Emma" }
+    ];
+    
+    const seedDB = async () => {
+        try {
+            await Article.deleteMany(); // Supprime les anciens articles
+            await Article.insertMany(articles); // Insère les nouveaux
+            console.log("✅ Données insérées avec succès !");
+        } catch (err) {
+            console.error("❌ Erreur lors de l'insertion :", err);
+        } finally {
+            mongoose.connection.close();
+        }
+    };
+    
+    seedDB();
+  "package.json": |
+    {
+      "name": "mongodb-seed",
+      "version": "1.0.0",
+      "dependencies": {
+        "mongoose": "^6.0.0",
+        "dotenv": "^16.0.0"
+      }
+    }
